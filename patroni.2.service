@@ -1,0 +1,39 @@
+# It's not recommended to modify this file in-place, because it will be
+# overwritten during package upgrades.  If you want to customize, the
+# best way is to create a file "/etc/systemd/system/patroni.service",
+# containing
+#	.include /lib/systemd/system/patroni.service
+#	Environment=PATRONI_CONFIG_LOCATION=...
+# For more info about custom unit files, see
+# http://fedoraproject.org/wiki/Systemd#How_do_I_customize_a_unit_file.2F_add_a_custom_unit_file.3F
+
+
+[Unit]
+Description=PostgreSQL high-availability manager
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+
+User=postgres
+Group=postgres
+
+# Location of Patroni configuration
+Environment=PATRONI_CONFIG_LOCATION=/opt/app/patroni/etc/postgresql.yml
+
+# Disable OOM kill on the postmaster
+OOMScoreAdjust=-1000
+
+ExecStart=/opt/app/patroni/bin/patroni ${PATRONI_CONFIG_LOCATION}
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Give a reasonable amount of time for the server to start up/shut down
+TimeoutSec=10
+
+# only kill the patroni process, not it's children, so it will gracefully stop postgres
+KillMode=process
+
+
+[Install]
+WantedBy=multi-user.target

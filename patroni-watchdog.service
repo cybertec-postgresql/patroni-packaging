@@ -1,0 +1,18 @@
+
+
+[Unit]
+Description=Makes kernel watchdog device available for Patroni
+Before=patroni.service
+
+[Service]
+Type=oneshot
+
+Environment=WATCHDOG_MODULE=softdog
+Environment=WATCHDOG_DEVICE=/dev/watchdog
+Environment=PATRONI_USER=postgres
+
+ExecStart=/usr/sbin/modprobe ${WATCHDOG_MODULE}
+ExecStart=/bin/chown ${PATRONI_USER} ${WATCHDOG_DEVICE}
+
+[Install]
+WantedBy=multi-user.target
