@@ -1,9 +1,9 @@
 %define        ENVNAME  patroni
 %define        INSTALLPATH /opt/app/patroni
-%define        GIT_REVISION f4beb9b
+%define        GIT_REVISION 660721d
 Name:          patroni
 Version:       1.2
-Release:       0.20161206git%{GIT_REVISION}
+Release:       0.20161207git%{GIT_REVISION}
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        $RPM_SOURCE_DIR/patroni-venv-%{GIT_REVISION}.tar.gz
