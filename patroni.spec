@@ -1,15 +1,16 @@
 %define        ENVNAME  patroni
 %define        INSTALLPATH /opt/app/patroni
-%define        GIT_REVISION 660721d
+%define debug_package %{nil}
 Name:          patroni
-Version:       1.2
-Release:       0.20161207git%{GIT_REVISION}
+Version:       1.3.3
+Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        $RPM_SOURCE_DIR/patroni-venv-%{GIT_REVISION}.tar.gz
+Source:        patroni-1.3.3.tar.gz
+Source1:       patroni-customizations.tar.gz
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.6.1, postgresql-server, libyaml
-BuildRequires: prelink
+BuildRequires: prelink libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
 
@@ -17,7 +18,8 @@ Requires(postun):       %{_sbindir}/update-alternatives
 Packaged version of Patroni HA manager.
 
 %prep
-%setup -q -c -n %{name}
+%setup
+%setup -D -T -a 1 
 
 %build
 # remove some things
@@ -26,27 +28,33 @@ Packaged version of Patroni HA manager.
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
+virtualenv --distribute $RPM_BUILD_ROOT%{INSTALLPATH}
+grep -v psycopg2 requirements.txt > requirements-venv.txt
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -r requirements-venv.txt
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install --no-deps .
+
+rm -rf $RPM_BUILD_ROOT/usr/
+
+virtualenv --relocatable $RPM_BUILD_ROOT%{INSTALLPATH}
+sed -i "s#$RPM_BUILD_ROOT##" $RPM_BUILD_ROOT%{INSTALLPATH}/bin/activate*
+
+#find $(VENV_PATH) -name \*py[co] -exec rm {} \;
+#find $(VENV_PATH) -name no-global-site-packages.txt -exec rm {} \;
+cp -r extras/ $RPM_BUILD_ROOT%{INSTALLPATH}
 
 mkdir -p $RPM_BUILD_ROOT/lib/systemd/system/
-cp extras/startup-scripts/patroni.2.service $RPM_BUILD_ROOT/lib/systemd/system/patroni.service
-cp extras/startup-scripts/patroni-watchdog.service $RPM_BUILD_ROOT/lib/systemd/system/patroni-watchdog.service
+cp patroni.2.service $RPM_BUILD_ROOT/lib/systemd/system/patroni.service
+cp patroni-watchdog.service $RPM_BUILD_ROOT/lib/systemd/system/patroni-watchdog.service
 
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}/etc/
-cp extras/postgresql.yml.sample $RPM_BUILD_ROOT%{INSTALLPATH}/etc/
+cp postgres-telia.yml $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 chmod 0600 $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 
-mv bin include lib lib64 pip-selfcheck.json $RPM_BUILD_ROOT%{INSTALLPATH}
 # undo prelinking
 find $RPM_BUILD_ROOT%{INSTALLPATH}/bin/ -type f -perm /u+x,g+x -exec /usr/sbin/prelink -u {} \;
-# remove rpath from build
-#chrpath -d $RPM_BUILD_ROOT/opt/pyenv/%{ENVNAME}/bin/uwsgi
-# re-point the lib64 symlink - not needed on newer virtualenv
-#rm $RPM_BUILD_ROOT/opt/pyenv/%{ENVNAME}/lib64
-#ln -sf /opt/pyenv/%{ENVNAME}/lib $RPM_BUILD_ROOT/opt/pyenv/%{ENVNAME}/lib64
-
-# Remove aio implementation that is broken in Python 2. Stops bytecode compilation otherwise.
-rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python2.7/site-packages/consul/aio.py
-
+# Remove debug info containing BUILDROOT. Hopefully nobody needs to debug or profile the python modules
+find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -name '*.so' -exec /usr/bin/strip -g {} \;
 
 %post
 %{_sbindir}/update-alternatives --install %{_bindir}/patroni \
@@ -59,7 +67,7 @@ if [ $1 -eq 0 ] ; then
 fi
 
 %clean
-#rm -rf $RPM_BUILD_ROOT
+rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)

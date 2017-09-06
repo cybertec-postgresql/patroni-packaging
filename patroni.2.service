@@ -11,7 +11,9 @@
 [Unit]
 Description=PostgreSQL high-availability manager
 After=syslog.target
-After=network.target
+# Patroni needs to shut down before network interfaces. According to SystemD documentation
+# specifying network.target should be sufficient, but experiments show that this is not the case.
+After=network-online.target
 
 [Service]
 Type=simple
@@ -29,11 +31,10 @@ ExecStart=/opt/app/patroni/bin/patroni ${PATRONI_CONFIG_LOCATION}
 ExecReload=/bin/kill -HUP $MAINPID
 
 # Give a reasonable amount of time for the server to start up/shut down
-TimeoutSec=10
+TimeoutSec=30
 
 # only kill the patroni process, not it's children, so it will gracefully stop postgres
 KillMode=process
-
 
 [Install]
 WantedBy=multi-user.target
