@@ -55,6 +55,9 @@ chmod 0600 $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 find $RPM_BUILD_ROOT%{INSTALLPATH}/bin/ -type f -perm /u+x,g+x -exec /usr/sbin/prelink -u {} \;
 # Remove debug info containing BUILDROOT. Hopefully nobody needs to debug or profile the python modules
 find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -name '*.so' -exec /usr/bin/strip -g {} \;
+# Fix up permissions on prettytable
+find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -not -perm /o+r | xargs chmod o+r
+
 
 %post
 %{_sbindir}/update-alternatives --install %{_bindir}/patroni \
