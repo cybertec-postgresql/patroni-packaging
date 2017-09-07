@@ -3,11 +3,12 @@
 %define debug_package %{nil}
 Name:          patroni
 Version:       1.3.3
-Release:       1.rhel7
+Release:       2.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.3.3.tar.gz
 Source1:       patroni-customizations.tar.gz
+Patch0:        telia-patch.diff
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.6.1, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -19,7 +20,8 @@ Packaged version of Patroni HA manager.
 
 %prep
 %setup
-%setup -D -T -a 1 
+%setup -D -T -a 1
+%patch0 -p1
 
 %build
 # remove some things

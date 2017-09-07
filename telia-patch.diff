@@ -1,0 +1,682 @@
+diff --git a/docs/ENVIRONMENT.rst b/docs/ENVIRONMENT.rst
+index 3a8494f..275e9c6 100644
+--- a/docs/ENVIRONMENT.rst
++++ b/docs/ENVIRONMENT.rst
+@@ -25,6 +25,14 @@ Example: defining ``PATRONI_admin_PASSWORD=strongpasswd`` and ``PATRONI_admin_OP
+ Consul
+ ------
+ -  **PATRONI\_CONSUL\_HOST**: the host:port for the Consul endpoint.
++-  **PATRONI\_CONSUL\_URL**: url for the Consul, in format: http(s)://host:port
++-  **PATRONI\_CONSUL\_PORT**: (optional) Consul port
++-  **PATRONI\_CONSUL\_SCHEME**: (optional) **http** or **https**, defaults to **http**
++-  **PATRONI\_CONSUL\_TOKEN**: (optional) ACL token
++-  **PATRONI\_CONSUL\_VERIFY**: (optional) whether to verify the SSL certificate for HTTPS requests
++-  **PATRONI\_CONSUL\_CACERT**: (optional) The ca certificate. If pressent it will enable validation.
++-  **PATRONI\_CONSUL\_CERT**: (optional) File with the client certificate
++-  **PATRONI\_CONSUL\_KEY**: (optional) File with the client key. Can be empty if the key is part of certificate.
+ 
+ Etcd
+ ----
+diff --git a/docs/SETTINGS.rst b/docs/SETTINGS.rst
+index 5e6ef77..7946c07 100644
+--- a/docs/SETTINGS.rst
++++ b/docs/SETTINGS.rst
+@@ -45,7 +45,16 @@ Bootstrap configuration
+ 
+ Consul
+ ------
+--  **host**: the host:port for the Consul endpoint.
++Most of the parameters are optional, but you have to specify one of the **host** or **url**
++-  **host**: the host:port for the Consul endpoint, in format: http(s)://host:port
++-  **url**: url for the Consul endpoint
++-  **port**: (optional) Consul port
++-  **scheme**: (optional) **http** or **https**, defaults to **http**
++-  **token**: (optional) ACL token
++-  **verify** (optional) whether to verify the SSL certificate for HTTPS requests
++-  **cacert**: (optional) The ca certificate. If pressent it will enable validation.
++-  **cert**: (optional) file with the client certificate
++-  **key**: (optional) file with the client key. Can be empty if the key is part of **cert**.
+ 
+ Etcd
+ ----
+diff --git a/features/watchdog.feature b/features/watchdog.feature
+index 00f4dde..4f8215f 100644
+--- a/features/watchdog.feature
++++ b/features/watchdog.feature
+@@ -1,16 +1,26 @@
+ Feature: watchdog
+   Verify that watchdog gets pinged and triggered under appropriate circumstances.
+ 
+-  Scenario: watchdog is opened, pinged and closed
++  Scenario: watchdog is opened and pinged
+     Given I start postgres0 with watchdog
+     Then postgres0 is a leader after 10 seconds
+     And postgres0 role is the primary after 10 seconds
+     And postgres0 watchdog has been pinged after 10 seconds
+-    When I shut down postgres0
++
++  Scenario: watchdog is disabled during pause
++    Given I run patronictl.py pause batman
++    Then I receive a response returncode 0
++    When I sleep for 2 seconds
+     Then postgres0 watchdog has been closed
+ 
+-  #TODO: test watchdog is disabled during pause
+-  #TODO: test watchdog is disabled properly when shutting down
++  Scenario: watchdog is opened and pinged after resume
++    Given I run patronictl.py resume batman
++    Then I receive a response returncode 0
++    And postgres0 watchdog has been pinged after 10 seconds
++
++  Scenario: watchdog is disabled when shutting down
++    Given I shut down postgres0
++    Then postgres0 watchdog has been closed
+ 
+   Scenario: watchdog is triggered if patroni stops responding
+     Given I start postgres0 with watchdog
+diff --git a/patroni/api.py b/patroni/api.py
+index 801b36b..ee8ff2d 100644
+--- a/patroni/api.py
++++ b/patroni/api.py
+@@ -293,9 +293,15 @@ class RestApiHandler(BaseHTTPRequestHandler):
+         if leader and (not cluster.leader or cluster.leader.name != leader):
+             return 'leader name does not match'
+         if candidate:
++            if cluster.is_synchronous_mode() and cluster.sync.sync_standby != candidate:
++                return 'candidate name does not match with sync_standby'
+             members = [m for m in cluster.members if m.name == candidate]
+             if not members:
+                 return 'candidate does not exists'
++        elif cluster.is_synchronous_mode():
++            members = [m for m in cluster.members if m.name == cluster.sync.sync_standby]
++            if not members:
++                return 'failover is not possible: can not find sync_standby'
+         else:
+             members = [m for m in cluster.members if m.name != cluster.leader.name and m.api_url]
+             if not members:
+@@ -376,6 +382,8 @@ class RestApiHandler(BaseHTTPRequestHandler):
+ 
+     def get_postgresql_status(self, retry=False):
+         try:
++            if self.server.patroni.postgresql.state not in ('running', 'restarting', 'starting'):
++                raise RetryFailedError('')
+             row = self.query("""WITH replication_info AS (
+                                     SELECT usename, application_name, client_addr, state, sync_state, sync_priority
+                                       FROM pg_stat_replication
+diff --git a/patroni/config.py b/patroni/config.py
+index 7e74081..42f47dd 100644
+--- a/patroni/config.py
++++ b/patroni/config.py
+@@ -242,8 +242,8 @@ class Config(object):
+                 name, suffix = (param[8:].rsplit('_', 1) + [''])[:2]
+                 if name and suffix:
+                     # PATRONI_(ETCD|CONSUL|ZOOKEEPER|EXHIBITOR|...)_(HOSTS?|PORT|..)
+-                    if suffix in ('HOST', 'HOSTS', 'PORT', 'SRV', 'URL', 'PROXY', 'CACERT', 'CERT', 'KEY') \
+-                            and '_' not in name:
++                    if suffix in ('HOST', 'HOSTS', 'PORT', 'SRV', 'URL', 'PROXY', 'CACERT', 'CERT', 'KEY',
++                                  'VERIFY', 'TOKEN') and '_' not in name:
+                         value = os.environ.pop(param)
+                         if suffix == 'PORT':
+                             value = value and parse_int(value)
+diff --git a/patroni/ctl.py b/patroni/ctl.py
+index 7400f80..680e2b3 100644
+--- a/patroni/ctl.py
++++ b/patroni/ctl.py
+@@ -31,6 +31,7 @@ from patroni.dcs import get_dcs as _get_dcs
+ from patroni.exceptions import PatroniException
+ from patroni.postgresql import Postgresql
+ from patroni.utils import is_valid_pg_version, patch_config
++from patroni.version import __version__
+ from prettytable import PrettyTable
+ from six.moves.urllib_parse import urlparse
+ from six import text_type
+@@ -690,8 +691,11 @@ def output_members(cluster, name, extended=False, fmt='pretty'):
+ @click.pass_obj
+ def members(obj, cluster_names, fmt, watch, w, extended):
+     if not cluster_names:
+-        logging.warning('Listing members: No cluster names were provided')
+-        return
++        if 'scope' not in obj:
++            logging.warning('Listing members: No cluster names were provided')
++            return
++        else:
++            cluster_names = [obj['scope']]
+ 
+     for cluster_name in cluster_names:
+         dcs = get_dcs(obj, cluster_name)
+@@ -1029,3 +1033,35 @@ def show_config(obj, cluster_name):
+     cluster = get_dcs(obj, cluster_name).get_cluster()
+ 
+     click.echo(format_config_for_editing(cluster.config.data))
++
++
++@ctl.command('version', help='Output version of patronictl command or a running Patroni instance')
++@click.argument('cluster_name', required=False)
++@click.argument('member_names', nargs=-1)
++@click.pass_obj
++def version(obj, cluster_name, member_names):
++    click.echo("patroni_ctl version {0}".format(__version__))
++
++    if not cluster_name:
++        return
++
++    click.echo("")
++    cluster = get_dcs(obj, cluster_name).get_cluster()
++    for m in cluster.members:
++        if m.api_url:
++            if not member_names or m.name in member_names:
++                try:
++                    response = request_patroni(m, 'get', None, auth_header(obj))
++                    data = response.json()
++                    version = data.get('patroni', {}).get('version')
++                    pg_version = data.get('server_version')
++                    pg_version_str = " PostgreSQL {0}".format(format_pg_version(pg_version)) if pg_version else ""
++                    click.echo("{0}: Patroni {1}{2}".format(m.name, version, pg_version_str))
++                except Exception, e:
++                    click.echo("{0}: failed to get version: {1}".format(m.name, e))
++
++def format_pg_version(version):
++    if version < 100000:
++        return "{0}.{1}.{2}".format(version // 10000, version // 100 % 100, version % 100)
++    else:
++        return "{0}.{1}".format(version // 10000, version % 100)
+diff --git a/patroni/dcs/__init__.py b/patroni/dcs/__init__.py
+index df8901a..7afbc99 100644
+--- a/patroni/dcs/__init__.py
++++ b/patroni/dcs/__init__.py
+@@ -320,6 +320,12 @@ class Cluster(namedtuple('Cluster', 'initialize,config,leader,last_leader_operat
+     def is_paused(self):
+         return self.config and self.config.data.get('pause', False) or False
+ 
++    def is_synchronous_mode(self):
++        return bool(self.config and self.config.data.get('synchronous_mode'))
++
++    def is_synchronous_mode_strict(self):
++        return bool(self.config and self.config.data.get('synchronous_mode_strict'))
++
+ 
+ @six.add_metaclass(abc.ABCMeta)
+ class AbstractDCS(object):
+diff --git a/patroni/dcs/consul.py b/patroni/dcs/consul.py
+index 4108f90..840d599 100644
+--- a/patroni/dcs/consul.py
++++ b/patroni/dcs/consul.py
+@@ -2,15 +2,16 @@ from __future__ import absolute_import
+ import logging
+ import os
+ import socket
++import ssl
+ import time
+ import urllib3
+ 
+ from consul import ConsulException, NotFound, base
+ from patroni.dcs import AbstractDCS, ClusterConfig, Cluster, Failover, Leader, Member, SyncState
+ from patroni.exceptions import DCSError
+-from patroni.utils import Retry, RetryFailedError
++from patroni.utils import parse_bool, Retry, RetryFailedError
+ from urllib3.exceptions import HTTPError
+-from six.moves.urllib.parse import urlencode
++from six.moves.urllib.parse import urlencode, urlparse
+ from six.moves.http_client import HTTPException
+ 
+ logger = logging.getLogger(__name__)
+@@ -26,14 +27,23 @@ class ConsulInternalError(ConsulException):
+ 
+ class HTTPClient(object):
+ 
+-    def __init__(self, host='127.0.0.1', port=8500, scheme='http', verify=True, timeout=10):
+-        self.host = host
+-        self.port = port
+-        self.scheme = scheme
+-        self.verify = verify
+-        self.set_read_timeout(timeout)
+-        self.base_uri = '{0}://{1}:{2}'.format(self.scheme, self.host, self.port)
+-        self.http = urllib3.PoolManager(num_pools=10)
++    def __init__(self, host='127.0.0.1', port=8500, scheme='http', verify=True, cert=None, ca_cert=None):
++        self._read_timeout = 10
++        self.base_uri = '{0}://{1}:{2}'.format(scheme, host, port)
++        kwargs = {}
++        if cert:
++            if isinstance(cert, tuple):
++                # Key and cert are separate
++                kwargs['cert_file'] = cert[0]
++                kwargs['key_file'] = cert[1]
++            else:
++                # combined certificate
++                kwargs['cert_file'] = cert
++        if ca_cert:
++            kwargs['ca_certs'] = ca_cert
++        if verify or ca_cert:
++            kwargs['cert_reqs'] = ssl.CERT_REQUIRED
++        self.http = urllib3.PoolManager(num_pools=10, **kwargs)
+         self._ttl = None
+ 
+     def set_read_timeout(self, timeout):
+@@ -78,9 +88,18 @@ class HTTPClient(object):
+ 
+ class ConsulClient(base.Consul):
+ 
+-    @staticmethod
+-    def connect(host, port, scheme, verify=True):
+-        return HTTPClient(host, port, scheme, verify)
++    def __init__(self, *args, **kwargs):
++        self._cert = kwargs.pop('cert', None)
++        self._ca_cert = kwargs.pop('ca_cert', None)
++        super(ConsulClient, self).__init__(*args, **kwargs)
++
++    def connect(self, *args, **kwargs):
++        kwargs.update(dict(zip(['host', 'port', 'scheme', 'verify'], args)))
++        if self._cert:
++            kwargs['cert'] = self._cert
++        if self._ca_cert:
++            kwargs['ca_cert'] = self._ca_cert
++        return HTTPClient(**kwargs)
+ 
+ 
+ def catch_consul_errors(func):
+@@ -104,8 +123,31 @@ class Consul(AbstractDCS):
+                                               HTTPError, socket.error, socket.timeout))
+ 
+         self._my_member_data = None
+-        host, port = config.get('host', '127.0.0.1:8500').split(':')
+-        self._client = ConsulClient(host=host, port=port)
++        kwargs = {}
++        if 'url' in config:
++            r = urlparse(config['url'])
++            config.update({'scheme': r.scheme, 'host': r.hostname, 'port': r.port or 8500})
++        elif 'host' in config:
++            host, port = (config.get('host', '127.0.0.1:8500') + ':8500').split(':')[:2]
++            config['host'] = host
++            if 'port' not in config:
++                config['port'] = int(port)
++
++        if config.get('cacert'):
++            config['ca_cert'] = config.pop('cacert')
++
++        if config.get('key') and config.get('cert'):
++            config['cert'] = (config['cert'], config['key'])
++
++        kwargs = {p: config.get(p) for p in ('host', 'port', 'token', 'scheme', 'cert', 'ca_cert') if config.get(p)}
++
++        verify = config.get('verify')
++        if not isinstance(verify, bool):
++            verify = parse_bool(verify)
++        if isinstance(verify, bool):
++            kwargs['verify'] = verify
++
++        self._client = ConsulClient(**kwargs)
+         self.set_retry_timeout(config['retry_timeout'])
+         self.set_ttl(config.get('ttl') or 30)
+         self._last_session_refresh = 0
+@@ -245,12 +287,14 @@ class Consul(AbstractDCS):
+         return False
+ 
+     @catch_consul_errors
++    def _do_attempt_to_acquire_leader(self, kwargs):
++        return self.retry(self._client.kv.put, self.leader_path, self._name, **kwargs)
++
+     def attempt_to_acquire_leader(self, permanent=False):
+         if not self._session and not permanent:
+             self.refresh_session()
+ 
+-        args = {} if permanent else {'acquire': self._session}
+-        ret = self.retry(self._client.kv.put, self.leader_path, self._name, **args)
++        ret = self._do_attempt_to_acquire_leader({} if permanent else {'acquire': self._session})
+         if not ret:
+             logger.info('Could not take out TTL lock')
+         return ret
+diff --git a/patroni/ha.py b/patroni/ha.py
+index 182bfe8..3f342c6 100644
+--- a/patroni/ha.py
++++ b/patroni/ha.py
+@@ -184,7 +184,10 @@ class Ha(object):
+             if timeout == 0:
+                 # We are requested to prefer failing over to restarting master. But see first if there
+                 # is anyone to fail over to.
+-                if self.is_failover_possible(self.cluster.members):
++                members = self.cluster.members
++                if self.is_synchronous_mode():
++                    members = [m for m in members if self.cluster.sync.matches(m.name)]
++                if self.is_failover_possible(members):
+                     logger.info("Master crashed. Failing over.")
+                     self.demote('immediate')
+                     return 'stopped PostgreSQL to fail over after a crash'
+@@ -249,10 +252,10 @@ class Ha(object):
+         return follow_reason
+ 
+     def is_synchronous_mode(self):
+-        return bool(self.cluster and self.cluster.config and self.cluster.config.data.get('synchronous_mode'))
++        return bool(self.cluster and self.cluster.is_synchronous_mode())
+ 
+     def is_synchronous_mode_strict(self):
+-        return bool(self.cluster and self.cluster.config and self.cluster.config.data.get('synchronous_mode_strict'))
++        return bool(self.cluster and self.cluster.is_synchronous_mode_strict())
+ 
+     def process_sync_replication(self):
+         """Process synchronous standby beahvior.
+@@ -341,14 +344,13 @@ class Ha(object):
+                 self._disable_sync -= 1
+ 
+     def enforce_master_role(self, message, promote_message):
+-        if not self.watchdog.is_running:
+-            if not self.watchdog.activate():
+-                if self.state_handler.is_leader():
+-                    self.demote('immediate')
+-                    return 'Demoting self because watchdog could not be activated'
+-                else:
+-                    self.release_leader_key_voluntarily()
+-                    return 'Not promoting self because watchdog could not be actived'
++        if not self.is_paused() and not self.watchdog.is_running and not self.watchdog.activate():
++            if self.state_handler.is_leader():
++                self.demote('immediate')
++                return 'Demoting self because watchdog could not be activated'
++            else:
++                self.release_leader_key_voluntarily()
++                return 'Not promoting self because watchdog could not be activated'
+ 
+         if self.state_handler.is_leader() or self.state_handler.role == 'master':
+             # Inform the state handler about its master role.
+@@ -549,8 +551,8 @@ class Ha(object):
+         self.state_handler.set_role('demoted')
+ 
+         if mode_control['release']:
+-                self.release_leader_key_voluntarily()
+-                time.sleep(2)  # Give a time to somebody to take the leader lock
++            self.release_leader_key_voluntarily()
++            time.sleep(2)  # Give a time to somebody to take the leader lock
+         if mode_control['offline']:
+             node_to_follow, leader = None, None
+         else:
+@@ -564,6 +566,8 @@ class Ha(object):
+             self._async_executor.schedule('starting after demotion')
+             self._async_executor.run_async(self.state_handler.follow, (node_to_follow,))
+         else:
++            if self.is_synchronous_mode():
++                self.state_handler.set_synchronous_standby(None)
+             if self.state_handler.rewind_needed_and_possible(leader):
+                 return False  # do not start postgres, but run pg_rewind on the next iteration
+             self.state_handler.follow(node_to_follow)
+@@ -622,8 +626,16 @@ class Ha(object):
+                 if not failover.candidate and self.is_paused():
+                     logger.warning('Failover is possible only to a specific candidate in a paused state')
+                 else:
+-                    members = [m for m in self.cluster.members
+-                               if not failover.candidate or m.name == failover.candidate]
++                    if self.is_synchronous_mode():
++                        if failover.candidate and not self.cluster.sync.matches(failover.candidate):
++                            logger.warning('Failover candidate=%s does not match with sync_standby=%s',
++                                           failover.candidate, self.cluster.sync.sync_standby)
++                            members = []
++                        else:
++                            members = [m for m in self.cluster.members if self.cluster.sync.matches(m.name)]
++                    else:
++                        members = [m for m in self.cluster.members
++                                   if not failover.candidate or m.name == failover.candidate]
+                     if self.is_failover_possible(members):  # check that there are healthy members
+                         self._async_executor.schedule('manual failover: demote')
+                         self._async_executor.run_async(self.demote, ('graceful',))
+@@ -915,6 +927,8 @@ class Ha(object):
+         # Check if we are in startup, when paused defer to main loop for manual failovers.
+         if not self.state_handler.check_for_startup() or self.is_paused():
+             self.set_start_timeout(None)
++            if self.is_paused():
++                self.state_handler.set_state(self.state_handler.is_running() and 'running' or 'stopped')
+             return None
+ 
+         # state_handler.state == 'starting' here
+diff --git a/patroni/postgresql.py b/patroni/postgresql.py
+index a81b947..356def4 100644
+--- a/patroni/postgresql.py
++++ b/patroni/postgresql.py
+@@ -17,7 +17,7 @@ from contextlib import contextmanager
+ from patroni import call_self
+ from patroni.callback_executor import CallbackExecutor
+ from patroni.exceptions import PostgresConnectionException
+-from patroni.utils import compare_values, parse_bool, parse_int, Retry, RetryFailedError, polling_loop, null_context
++from patroni.utils import compare_values, parse_bool, parse_int, Retry, RetryFailedError, polling_loop
+ from six import string_types
+ from six.moves.urllib.parse import quote_plus
+ from threading import current_thread, Lock
+@@ -42,6 +42,12 @@ STOP_SIGNALS = {
+ }
+ STOP_POLLING_INTERVAL = 1
+ REWIND_STATUS = type('Enum', (), {'INITIAL': 0, 'CHECK': 1, 'NEED': 2, 'NOT_NEED': 3, 'SUCCESS': 4, 'FAILED': 5})
++sync_standby_name_re = re.compile('^[A-Za-z_][A-Za-z_0-9\$]*$')
++
++
++def quote_ident(value):
++    """Very simplified version of quote_ident"""
++    return value if sync_standby_name_re.match(value) else '"' + value + '"'
+ 
+ 
+ def slot_name_from_member_name(member_name):
+@@ -60,6 +66,11 @@ def slot_name_from_member_name(member_name):
+     return slot_name[0:63]
+ 
+ 
++@contextmanager
++def null_context():
++    yield
++
++
+ class Postgresql(object):
+ 
+     # List of parameters which must be always passed to postmaster as command line options
+@@ -1652,12 +1663,13 @@ $$""".format(name, ' '.join(options)), name, password, password)
+         :returns tuple of candidate name or None, and bool showing if the member is the active synchronous standby.
+         """
+         current = cluster.sync.sync_standby
+-        members = {m.name: m for m in cluster.members}
++        current = current.lower() if current else current
++        members = {m.name.lower(): m for m in cluster.members}
+         candidates = []
+         # Pick candidates based on who has flushed WAL farthest.
+         # TODO: for synchronous_commit = remote_write we actually want to order on write_location
+         for app_name, state, sync_state in self.query(
+-                """SELECT application_name, state, sync_state
++                """SELECT LOWER(application_name), state, sync_state
+                      FROM pg_stat_replication
+                     ORDER BY flush_{0} DESC""".format(self.lsn_name)):
+             member = members.get(app_name)
+@@ -1677,14 +1689,17 @@ $$""".format(name, ' '.join(options)), name, password, password)
+ 
+     def set_synchronous_standby(self, name):
+         """Sets a node to be synchronous standby and if changed does a reload for PostgreSQL."""
++        if name and name != '*':
++            name = quote_ident(name)
+         if name != self._synchronous_standby_names:
+             if name is None:
+                 self._server_parameters.pop('synchronous_standby_names', None)
+             else:
+                 self._server_parameters['synchronous_standby_names'] = name
+             self._synchronous_standby_names = name
+-            self._write_postgresql_conf()
+-            self.reload()
++            if self.state == 'running':
++                self._write_postgresql_conf()
++                self.reload()
+ 
+     @staticmethod
+     def postgres_version_to_int(pg_version):
+diff --git a/patroni/utils.py b/patroni/utils.py
+index 890861f..3ebd1f7 100644
+--- a/patroni/utils.py
++++ b/patroni/utils.py
+@@ -1,4 +1,3 @@
+-import contextlib
+ import random
+ import time
+ import re
+@@ -281,8 +280,3 @@ def polling_loop(timeout, interval=1):
+         yield iteration
+         iteration += 1
+         time.sleep(interval)
+-
+-
+-@contextlib.contextmanager
+-def null_context():
+-    yield
+diff --git a/patroni/watchdog/base.py b/patroni/watchdog/base.py
+index 9bdb638..51fdb14 100644
+--- a/patroni/watchdog/base.py
++++ b/patroni/watchdog/base.py
+@@ -202,7 +202,8 @@ class Watchdog(object):
+     @synchronized
+     def keepalive(self):
+         try:
+-            self.impl.keepalive()
++            if self.active:
++                self.impl.keepalive()
+             # In case there are any pending configuration changes apply them now.
+             if self.active and self.config != self.active_config:
+                 if self.config.mode != MODE_OFF and self.active_config.mode == MODE_OFF:
+diff --git a/requirements.txt b/requirements.txt
+index 5aeb856..a66aaef 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -6,7 +6,7 @@ requests
+ six >= 1.7
+ kazoo==2.2.1
+ python-etcd>=0.4.3,<0.5
+-python-consul==0.7.0
++python-consul>=0.7.0
+ click>=4.1
+ prettytable>=0.7
+ tzlocal
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 37d05ec..653958d 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -3,7 +3,7 @@ import json
+ import psycopg2
+ import unittest
+ 
+-from mock import Mock, patch
++from mock import Mock, PropertyMock, patch
+ from patroni.api import RestApiHandler, RestApiServer
+ from patroni.dcs import ClusterConfig, Member
+ from patroni.ha import _MemberStatus
+@@ -152,6 +152,7 @@ class TestRestApiHandler(unittest.TestCase):
+     def test_do_OPTIONS(self):
+         self.assertIsNotNone(MockRestApiServer(RestApiHandler, 'OPTIONS / HTTP/1.0'))
+ 
++    @patch.object(MockPostgresql, 'state', PropertyMock(return_value='stopped'))
+     def test_do_GET_patroni(self):
+         self.assertIsNotNone(MockRestApiServer(RestApiHandler, 'GET /patroni'))
+ 
+@@ -280,6 +281,7 @@ class TestRestApiHandler(unittest.TestCase):
+     def test_do_POST_failover(self, dcs):
+         dcs.loop_wait = 10
+         cluster = dcs.get_cluster.return_value
++        cluster.is_synchronous_mode.return_value = False
+ 
+         post = 'POST /failover HTTP/1.0' + self._authorization + '\nContent-Length: '
+ 
+@@ -291,14 +293,16 @@ class TestRestApiHandler(unittest.TestCase):
+         cluster.leader.name = 'postgresql1'
+         MockRestApiServer(RestApiHandler, request)
+ 
+-        MockRestApiServer(RestApiHandler, post + '25\n\n{"leader": "postgresql1"}')
++        for cluster.is_synchronous_mode.return_value in (True, False):
++            MockRestApiServer(RestApiHandler, post + '25\n\n{"leader": "postgresql1"}')
+ 
+         cluster.leader.name = 'postgresql2'
+         request = post + '53\n\n{"leader": "postgresql1", "candidate": "postgresql2"}'
+         MockRestApiServer(RestApiHandler, request)
+ 
+         cluster.leader.name = 'postgresql1'
+-        MockRestApiServer(RestApiHandler, request)
++        for cluster.is_synchronous_mode.return_value in (True, False):
++            MockRestApiServer(RestApiHandler, request)
+ 
+         cluster.members = [Member(0, 'postgresql0', 30, {'api_url': 'http'}),
+                            Member(0, 'postgresql2', 30, {'api_url': 'http'})]
+diff --git a/tests/test_consul.py b/tests/test_consul.py
+index 04700b3..004b6fc 100644
+--- a/tests/test_consul.py
++++ b/tests/test_consul.py
+@@ -69,6 +69,10 @@ class TestConsul(unittest.TestCase):
+     @patch.object(consul.Consul.KV, 'get', kv_get)
+     @patch.object(consul.Consul.KV, 'delete', Mock())
+     def setUp(self):
++        Consul({'ttl': 30, 'scope': 't', 'name': 'p', 'url': 'https://l:1', 'retry_timeout': 10,
++                'verify': 'on', 'key': 'foo', 'cert': 'bar', 'cacert': 'buz'})
++        Consul({'ttl': 30, 'scope': 't', 'name': 'p', 'url': 'https://l:1', 'retry_timeout': 10,
++                'verify': 'on', 'cert': 'bar', 'cacert': 'buz'})
+         self.c = Consul({'ttl': 30, 'scope': 'test', 'name': 'postgresql1', 'host': 'localhost:1', 'retry_timeout': 10})
+         self.c._base_path = '/service/good'
+         self.c._load_cluster()
+diff --git a/tests/test_ha.py b/tests/test_ha.py
+index 6dc4549..645886f 100644
+--- a/tests/test_ha.py
++++ b/tests/test_ha.py
+@@ -63,6 +63,7 @@ def get_node_status(reachable=True, in_recovery=True, wal_position=10, nofailove
+         return _MemberStatus(e, reachable, in_recovery, wal_position, tags, watchdog_failed)
+     return fetch_node_status
+ 
++
+ future_restart_time = datetime.datetime.now(tzutc) + datetime.timedelta(days=5)
+ postmaster_start_time = datetime.datetime.now(tzutc)
+ 
+@@ -157,7 +158,6 @@ class TestHa(unittest.TestCase):
+             self.ha.old_cluster = self.e.get_cluster()
+             self.ha.cluster = get_cluster_not_initialized_without_leader()
+             self.ha.load_cluster_from_dcs = Mock()
+-            self.ha.is_synchronous_mode = false
+ 
+     def test_update_lock(self):
+         self.p.last_operation = Mock(side_effect=PostgresConnectionException(''))
+@@ -246,7 +246,7 @@ class TestHa(unittest.TestCase):
+         with patch.object(Watchdog, 'activate', Mock(return_value=False)):
+             self.assertEquals(self.ha.run_cycle(), 'Demoting self because watchdog could not be activated')
+             self.p.is_leader = false
+-            self.assertEquals(self.ha.run_cycle(), 'Not promoting self because watchdog could not be actived')
++            self.assertEquals(self.ha.run_cycle(), 'Not promoting self because watchdog could not be activated')
+ 
+     def test_leader_with_lock(self):
+         self.ha.cluster.is_unlocked = false
+@@ -438,6 +438,19 @@ class TestHa(unittest.TestCase):
+         self.assertEquals('PAUSE: no action.  i am the leader with the lock', self.ha.run_cycle())
+ 
+     @patch('requests.get', requests_get)
++    def test_manual_failover_from_leader_in_synchronous_mode(self):
++        self.p.is_leader = true
++        self.ha.has_lock = true
++        self.ha.is_synchronous_mode = true
++        self.ha.is_failover_possible = false
++        self.ha.process_sync_replication = Mock()
++        self.ha.cluster = get_cluster_initialized_with_leader(Failover(0, self.p.name, 'a', None), (self.p.name, None))
++        self.assertEquals('no action.  i am the leader with the lock', self.ha.run_cycle())
++        self.ha.cluster = get_cluster_initialized_with_leader(Failover(0, self.p.name, 'a', None), (self.p.name, 'a'))
++        self.ha.is_failover_possible = true
++        self.assertEquals('manual failover: demoting myself', self.ha.run_cycle())
++
++    @patch('requests.get', requests_get)
+     def test_manual_failover_process_no_leader(self):
+         self.p.is_leader = false
+         self.ha.cluster = get_cluster_initialized_without_leader(failover=Failover(0, '', self.p.name, None))
+@@ -634,7 +647,8 @@ class TestHa(unittest.TestCase):
+     @patch('patroni.ha.Ha.demote')
+     def test_failover_immediately_on_zero_master_start_timeout(self, demote):
+         self.p.is_running = false
+-        self.ha.cluster = get_cluster_initialized_with_leader()
++        self.ha.cluster = get_cluster_initialized_with_leader(sync=(self.p.name, 'other'))
++        self.ha.cluster.config.data['synchronous_mode'] = True
+         self.ha.patroni.config.set_dynamic_configuration({'master_start_timeout': 0})
+         self.ha.has_lock = true
+         self.ha.update_lock = true
+diff --git a/tests/test_watchdog.py b/tests/test_watchdog.py
+index d7775da..85e45a9 100644
+--- a/tests/test_watchdog.py
++++ b/tests/test_watchdog.py
+@@ -132,8 +132,9 @@ class TestWatchdog(unittest.TestCase):
+     def test_exceptions(self):
+         wd = Watchdog({'ttl': 30, 'loop_wait': 10, 'watchdog': {'mode': 'bad'}})
+         wd.impl.close = wd.impl.keepalive = Mock(side_effect=WatchdogError(''))
+-        self.assertIsNone(wd.disable())
++        self.assertTrue(wd.activate())
+         self.assertIsNone(wd.keepalive())
++        self.assertIsNone(wd.disable())
+ 
+     @patch('platform.system', Mock(return_value='Linux'))
+     def test_config_reload(self):
