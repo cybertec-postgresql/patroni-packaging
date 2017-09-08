@@ -2,11 +2,11 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.3.3
-Release:       2.rhel7
+Version:       1.3.4
+Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.3.3.tar.gz
+Source:        patroni-1.3.4.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        telia-patch.diff
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
