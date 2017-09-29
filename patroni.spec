@@ -3,7 +3,7 @@
 %define debug_package %{nil}
 Name:          patroni
 Version:       1.3.4
-Release:       1.rhel7
+Release:       2.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.3.4.tar.gz
@@ -80,3 +80,10 @@ rm -rf $RPM_BUILD_ROOT
 %attr(-, postgres, postgres) /opt/app/patroni/etc
 %attr(664, root, root) /lib/systemd/system/patroni.service
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
+
+%changelog
+
+* Sat Sep 30 2017 Ants Aasma  1.3.4-2.rhel7
+- Add warning for cluster being in paused mode
+- Pull in master changes up to cfdda23e
+

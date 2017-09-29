@@ -1,5 +1,42 @@
+diff --git a/features/steps/watchdog.py b/features/steps/watchdog.py
+index dda5444..58f50e5 100644
+--- a/features/steps/watchdog.py
++++ b/features/steps/watchdog.py
+@@ -31,7 +31,7 @@ def watchdog_was_closed(context, name):
+     assert context.pctl.get_watchdog(name).was_closed
+ 
+ 
+-@step('I wait for next {name:w} watchdog ping')
++@step('I reset {name:w} watchdog state')
+ def watchdog_reset_pinged(context, name):
+     context.pctl.get_watchdog(name).reset()
+ 
+diff --git a/features/watchdog.feature b/features/watchdog.feature
+index 4f8215f..216b0c4 100644
+--- a/features/watchdog.feature
++++ b/features/watchdog.feature
+@@ -14,7 +14,8 @@ Feature: watchdog
+     Then postgres0 watchdog has been closed
+ 
+   Scenario: watchdog is opened and pinged after resume
+-    Given I run patronictl.py resume batman
++    Given I reset postgres0 watchdog state
++    And I run patronictl.py resume batman
+     Then I receive a response returncode 0
+     And postgres0 watchdog has been pinged after 10 seconds
+ 
+@@ -23,7 +24,8 @@ Feature: watchdog
+     Then postgres0 watchdog has been closed
+ 
+   Scenario: watchdog is triggered if patroni stops responding
+-    Given I start postgres0 with watchdog
++    Given I reset postgres0 watchdog state
++    And I start postgres0 with watchdog
+     Then postgres0 role is the primary after 10 seconds
+     When postgres0 hangs for 30 seconds
+     Then postgres0 watchdog is triggered after 30 seconds
 diff --git a/patroni/ctl.py b/patroni/ctl.py
-index 7400f80..142d1d2 100644
+index 7400f80..942389f 100644
 --- a/patroni/ctl.py
 +++ b/patroni/ctl.py
 @@ -31,6 +31,7 @@ from patroni.dcs import get_dcs as _get_dcs
@@ -34,7 +71,16 @@ index 7400f80..142d1d2 100644
  
      if fmt == 'tsv':
          if columns is not None and header:
-@@ -684,19 +688,26 @@ def output_members(cluster, name, extended=False, fmt='pretty'):
+@@ -678,25 +682,35 @@ def output_members(cluster, name, extended=False, fmt='pretty'):
+         columns.append('Scheduled restart')
+         alignment['Scheduled restart'] = 'l'
+ 
++    if cluster.is_paused() and fmt == 'pretty':
++        click.echo("WARNING: Cluster is in paused mode")
++
+     print_output(columns, rows, alignment, fmt)
+ 
+ 
  @ctl.command('list', help='List the Patroni members for a given Patroni')
  @click.argument('cluster_names', nargs=-1)
  @click.option('--extended', '-e', help='Show some extra information', is_flag=True)
@@ -64,7 +110,7 @@ index 7400f80..142d1d2 100644
              cluster = dcs.get_cluster()
              output_members(cluster, cluster_name, extended, fmt)
  
-@@ -1029,3 +1040,35 @@ def show_config(obj, cluster_name):
+@@ -1029,3 +1043,35 @@ def show_config(obj, cluster_name):
      cluster = get_dcs(obj, cluster_name).get_cluster()
  
      click.echo(format_config_for_editing(cluster.config.data))
@@ -101,10 +147,27 @@ index 7400f80..142d1d2 100644
 +    else:
 +        return "{0}.{1}".format(version // 10000, version % 100)
 diff --git a/patroni/ha.py b/patroni/ha.py
-index 3f342c6..837aada 100644
+index 3f342c6..2b99763 100644
 --- a/patroni/ha.py
 +++ b/patroni/ha.py
-@@ -1082,7 +1082,8 @@ class Ha(object):
+@@ -207,6 +207,16 @@ class Ha(object):
+             msg = "starting as a secondary"
+             node_to_follow = self._get_node_to_follow(self.cluster)
+ 
++        # once we already tried to start postgres but failed, single user mode is a rescue in this case
++        if self.recovering and not self.state_handler.rewind_executed and self.state_handler.can_rewind:
++            data = self.state_handler.controldata()
++            if data.get('Database cluster state') not in ('shut down', 'shut down in recovery'):
++                self.recovering = False
++                msg = 'fixing cluster state in a single user mode'
++                self._async_executor.schedule(msg)
++                self._async_executor.run_async(self.state_handler.fix_cluster_state)
++                return msg
++
+         self.recovering = True
+ 
+         self._async_executor.schedule('restarting after failure')
+@@ -1082,7 +1092,8 @@ class Ha(object):
              disable_wd = self.watchdog.disable if self.watchdog.is_running else None
              self.while_not_sync_standby(lambda: self.state_handler.stop(checkpoint=False, on_safepoint=disable_wd))
              if not self.state_handler.is_running():
@@ -114,3 +177,289 @@ index 3f342c6..837aada 100644
              else:
                  # XXX: what about when Patroni is started as the wrong user that has access to the watchdog device
                  # but cannot shut down PostgreSQL. Root would be the obvious example. Would be nice to not kill the
+diff --git a/patroni/postgresql.py b/patroni/postgresql.py
+index 356def4..edd43f6 100644
+--- a/patroni/postgresql.py
++++ b/patroni/postgresql.py
+@@ -1261,12 +1261,14 @@ class Postgresql(object):
+         else:  # otherwise analyze pg_controldata output
+             data = self.controldata()
+             try:
++                if data.get('Database cluster state') == 'shut down in recovery':
++                    lsn = data.get('Minimum recovery ending location')
++                    timeline = int(data.get("Min recovery ending loc's timeline"))
++                    if lsn == '0/0' or timeline == 0:  # it was a master when it crashed
++                        data['Database cluster state'] = 'shut down'
+                 if data.get('Database cluster state') == 'shut down':
+                     lsn = data.get('Latest checkpoint location')
+                     timeline = int(data.get("Latest checkpoint's TimeLineID"))
+-                elif data.get('Database cluster state') == 'shut down in recovery':
+-                    lsn = data.get('Minimum recovery ending location')
+-                    timeline = int(data.get("Min recovery ending loc's timeline"))
+             except (TypeError, ValueError):
+                 logger.exception('Failed to get local timeline and lsn from pg_controldata output')
+         logger.info('Local timeline=%s lsn=%s', timeline, lsn)
+@@ -1744,3 +1746,57 @@ $$""".format(name, ' '.join(options)), name, password, password)
+         90600
+         """
+         return Postgresql.postgres_version_to_int(pg_version + '.0')
++
++    def read_postmaster_opts(self):
++        """returns the list of option names/values from postgres.opts, Empty dict if read failed or no file"""
++        result = {}
++        try:
++            with open(os.path.join(self._data_dir, 'postmaster.opts')) as f:
++                data = f.read()
++                for opt in data.split('" "'):
++                    if '=' in opt and opt.startswith('--'):
++                        name, val = opt.split('=', 1)
++                        result[name.strip('-')] = val.rstrip('"\n')
++        except IOError:
++            logger.exception('Error when reading postmaster.opts')
++        return result
++
++    def single_user_mode(self, command=None, options=None):
++        """run a given command in a single-user mode. If the command is empty - then just start and stop"""
++        cmd = [self._pgcommand('postgres'), '--single', '-D', self._data_dir]
++        for opt, val in sorted((options or {}).items()):
++            cmd.extend(['-c', '{0}={1}'.format(opt, val)])
++        # need a database name to connect
++        cmd.append(self._database)
++        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT)
++        if p:
++            if command:
++                p.communicate('{0}\n'.format(command))
++            p.stdin.close()
++            return p.wait()
++        return 1
++
++    def cleanup_archive_status(self):
++        status_dir = os.path.join(self._data_dir, 'pg_' + self.wal_name, 'archive_status')
++        try:
++            for f in os.listdir(status_dir):
++                path = os.path.join(status_dir, f)
++                try:
++                    if os.path.islink(path):
++                        os.unlink(path)
++                    elif os.path.isfile(path):
++                        os.remove(path)
++                except OSError:
++                    logger.exception('Unable to remove %s', path)
++        except OSError:
++            logger.exception('Unable to list %s', status_dir)
++
++    def fix_cluster_state(self):
++        self.cleanup_archive_status()
++
++        # Start in a single user mode and stop to produce a clean shutdown
++        opts = self.read_postmaster_opts()
++        opts.update({'archive_mode': 'on', 'archive_command': 'false'})
++        if os.path.isfile(self._recovery_conf) or os.path.islink(self._recovery_conf):
++            os.unlink(self._recovery_conf)
++        return self.single_user_mode(options=opts) == 0 or None
+diff --git a/patroni/watchdog/base.py b/patroni/watchdog/base.py
+index 51fdb14..0007dee 100644
+--- a/patroni/watchdog/base.py
++++ b/patroni/watchdog/base.py
+@@ -133,6 +133,7 @@ class Watchdog(object):
+ 
+         try:
+             self.impl.open()
++            actual_timeout = self._set_timeout()
+         except WatchdogError as e:
+             logger.warning("Could not activate %s: %s", self.impl.describe(), e)
+             self.impl = NullWatchdog()
+@@ -141,8 +142,6 @@ class Watchdog(object):
+             logger.warning("Watchdog implementation can't be disabled."
+                            " Watchdog will trigger after Patroni loses leader key.")
+ 
+-        actual_timeout = self._set_timeout()
+-
+         if not self.impl.is_running or actual_timeout > self.config.timeout:
+             if self.config.mode == MODE_REQUIRED:
+                 if self.impl.is_null:
+diff --git a/patroni/watchdog/linux.py b/patroni/watchdog/linux.py
+index 41c9974..311dcd1 100644
+--- a/patroni/watchdog/linux.py
++++ b/patroni/watchdog/linux.py
+@@ -155,21 +155,25 @@ class LinuxWatchdogDevice(WatchdogBase):
+     def can_be_disabled(self):
+         return self.get_support().has_MAGICCLOSE
+ 
+-    def _ioctl(self, func, arg, mutate_arg=False):
++    def _ioctl(self, func, arg):
++        """Runs the specified ioctl on the underlying fd.
++
++        Raises WatchdogError if the device is closed.
++        Raises OSError or IOError (Python 2) when the ioctl fails."""
+         if self._fd is None:
+             raise WatchdogError("Watchdog device is closed")
+-
+-        result = fcntl.ioctl(self._fd, func, arg, mutate_arg)
+-        if result < 0:
+-            raise IOError(result)
++        fcntl.ioctl(self._fd, func, arg, True)
+ 
+     def get_support(self):
+         if self._support_cache is None:
+             info = watchdog_info()
+-            self._ioctl(WDIOC_GETSUPPORT, info, True)
++            try:
++                self._ioctl(WDIOC_GETSUPPORT, info)
++            except (WatchdogError, OSError, IOError) as e:
++                raise WatchdogError("Could not get information about watchdog device: {}".format(e))
+             self._support_cache = WatchdogInfo(info.options,
+                                                info.firmware_version,
+-                                               str(bytearray(info.identity)).rstrip('\x00'))
++                                               bytearray(info.identity).decode(errors='ignore').rstrip('\x00'))
+         return self._support_cache
+ 
+     def describe(self):
+@@ -180,7 +184,7 @@ class LinuxWatchdogDevice(WatchdogBase):
+             try:
+                 _, version, identity = self.get_support()
+                 ver_str = " (firmware {0})".format(version) if version else ""
+-            except WatchdogError:  # XXX: Can it really be raise when self._fd is not None?
++            except WatchdogError:
+                 pass
+ 
+         return identity + ver_str + dev_str
+@@ -199,11 +203,17 @@ class LinuxWatchdogDevice(WatchdogBase):
+         timeout = int(timeout)
+         if not 0 < timeout < 0xFFFF:
+             raise WatchdogError("Invalid timeout {0}. Supported values are between 1 and 65535".format(timeout))
+-        self._ioctl(WDIOC_SETTIMEOUT, ctypes.c_int(timeout))
++        try:
++            self._ioctl(WDIOC_SETTIMEOUT, ctypes.c_int(timeout))
++        except (WatchdogError, OSError, IOError) as e:
++            raise WatchdogError("Could not set timeout on watchdog device: {}".format(e))
+ 
+     def get_timeout(self):
+         timeout = ctypes.c_int()
+-        self._ioctl(WDIOC_GETTIMEOUT, timeout, True)
++        try:
++            self._ioctl(WDIOC_GETTIMEOUT, timeout)
++        except (WatchdogError, OSError, IOError) as e:
++            raise WatchdogError("Could not get timeout on watchdog device: {}".format(e))
+         return timeout.value
+ 
+ 
+diff --git a/tests/test_ha.py b/tests/test_ha.py
+index 645886f..6162ef2 100644
+--- a/tests/test_ha.py
++++ b/tests/test_ha.py
+@@ -193,6 +193,15 @@ class TestHa(unittest.TestCase):
+         self.ha.cluster = get_cluster_initialized_with_leader()
+         self.assertEquals(self.ha.run_cycle(), 'running pg_rewind from leader')
+ 
++    @patch.object(Postgresql, 'can_rewind', PropertyMock(return_value=True))
++    @patch.object(Postgresql, 'fix_cluster_state', Mock())
++    def test_single_user_after_recover_failed(self):
++        self.p.controldata = lambda: {'Database cluster state': 'in production'}
++        self.p.is_running = false
++        self.p.follow = false
++        self.assertEquals(self.ha.run_cycle(), 'starting as a secondary')
++        self.assertEquals(self.ha.run_cycle(), 'fixing cluster state in a single user mode')
++
+     @patch('sys.exit', return_value=1)
+     @patch('patroni.ha.Ha.sysid_valid', MagicMock(return_value=True))
+     def test_sysid_no_match(self, exit_mock):
+diff --git a/tests/test_postgresql.py b/tests/test_postgresql.py
+index 24c9e82..94491e9 100644
+--- a/tests/test_postgresql.py
++++ b/tests/test_postgresql.py
+@@ -174,7 +174,7 @@ class TestPostgresql(unittest.TestCase):
+         if not os.path.exists(self.data_dir):
+             os.makedirs(self.data_dir)
+         self.p = Postgresql({'name': 'test0', 'scope': 'batman', 'data_dir': self.data_dir,
+-                             'config_dir': self.config_dir, 'retry_timeout': 10,
++                             'config_dir': self.config_dir, 'retry_timeout': 10, 'pgpass': '/tmp/pgpass0',
+                              'listen': '127.0.0.2, 127.0.0.3:5432', 'connect_address': '127.0.0.2:5432',
+                              'authentication': {'superuser': {'username': 'test', 'password': 'test'},
+                                                 'replication': {'username': 'replicator', 'password': 'rep-pass'}},
+@@ -327,10 +327,10 @@ class TestPostgresql(unittest.TestCase):
+     @patch.object(Postgresql, 'can_rewind', PropertyMock(return_value=True))
+     def test__get_local_timeline_lsn(self):
+         self.p.trigger_check_diverged_lsn()
+-        with patch.object(Postgresql, 'controldata', Mock(return_value={'Database cluster state': 'shut down'})):
+-            self.p.rewind_needed_and_possible(self.leader)
+         with patch.object(Postgresql, 'controldata',
+-                          Mock(return_value={'Database cluster state': 'shut down in recovery'})):
++                          Mock(return_value={'Database cluster state': 'shut down in recovery',
++                                             'Minimum recovery ending location': '0/0',
++                                             "Min recovery ending loc's timeline": '0'})):
+             self.p.rewind_needed_and_possible(self.leader)
+         with patch.object(Postgresql, 'is_running', Mock(return_value=True)):
+             with patch.object(MockCursor, 'fetchone', Mock(side_effect=[(False, ), Exception])):
+@@ -883,3 +883,40 @@ class TestPostgresql(unittest.TestCase):
+     def test_terminate_starting_postmaster(self):
+         self.p.terminate_starting_postmaster(123)
+         self.p.terminate_starting_postmaster(123)
++
++    def test_read_postmaster_opts(self):
++        m = mock_open(read_data='/usr/lib/postgres/9.6/bin/postgres "-D" "data/postgresql0" \
++"--listen_addresses=127.0.0.1" "--port=5432" "--hot_standby=on" "--wal_level=hot_standby" \
++"--wal_log_hints=on" "--max_wal_senders=5" "--max_replication_slots=5"\n')
++        with patch.object(builtins, 'open', m):
++            data = self.p.read_postmaster_opts()
++            self.assertEquals(data['wal_level'], 'hot_standby')
++            self.assertEquals(int(data['max_replication_slots']), 5)
++            self.assertEqual(data.get('D'), None)
++
++            m.side_effect = IOError
++            data = self.p.read_postmaster_opts()
++            self.assertEqual(data, dict())
++
++    @patch('subprocess.Popen')
++    @patch.object(builtins, 'open', Mock(return_value=42))
++    def test_single_user_mode(self, subprocess_popen_mock):
++        subprocess_popen_mock.return_value.wait.return_value = 0
++        self.assertEquals(self.p.single_user_mode(command="CHECKPOINT"), 0)
++        subprocess_popen_mock.return_value = None
++        self.assertEquals(self.p.single_user_mode(), 1)
++
++    @patch('os.listdir', Mock(side_effect=[OSError, ['a', 'b']]))
++    @patch('os.unlink', Mock(side_effect=OSError))
++    @patch('os.remove', Mock())
++    @patch('os.path.islink', Mock(side_effect=[True, False]))
++    @patch('os.path.isfile', Mock(return_value=True))
++    def test_cleanup_archive_status(self):
++        self.p.cleanup_archive_status()
++        self.p.cleanup_archive_status()
++
++    @patch('os.unlink', Mock())
++    @patch('os.path.isfile', Mock(return_value=True))
++    @patch.object(Postgresql, 'single_user_mode', Mock(return_value=0))
++    def test_fix_cluster_state(self):
++        self.assertTrue(self.p.fix_cluster_state())
+diff --git a/tests/test_watchdog.py b/tests/test_watchdog.py
+index 85e45a9..42434b9 100644
+--- a/tests/test_watchdog.py
++++ b/tests/test_watchdog.py
+@@ -194,15 +194,24 @@ class TestLinuxWatchdogDevice(unittest.TestCase):
+         self.assertRaises(WatchdogError, self.impl.set_timeout, -1)
+ 
+     @patch('os.open', Mock(return_value=3))
+-    @patch('fcntl.ioctl', Mock(return_value=-1))
++    @patch('fcntl.ioctl', Mock(side_effect=OSError))
+     def test__ioctl(self):
+         self.assertRaises(WatchdogError, self.impl.get_support)
+         self.impl.open()
+-        self.assertRaises(IOError, self.impl.get_support)
++        self.assertRaises(WatchdogError, self.impl.get_support)
+ 
+     def test_is_healthy(self):
+         self.assertFalse(self.impl.is_healthy)
+ 
++    @patch('os.open', Mock(return_value=3))
++    @patch('fcntl.ioctl', Mock(side_effect=OSError))
++    def test_error_handling(self):
++        self.impl.open()
++        self.assertRaises(WatchdogError, self.impl.get_timeout)
++        self.assertRaises(WatchdogError, self.impl.set_timeout, 10)
++        # We still try to output a reasonable string even if getting info errors
++        self.assertEquals(self.impl.describe(), "Linux watchdog device")
++
+     @patch('os.open', Mock(side_effect=OSError))
+     def test_open(self):
+         self.assertRaises(WatchdogError, self.impl.open)
