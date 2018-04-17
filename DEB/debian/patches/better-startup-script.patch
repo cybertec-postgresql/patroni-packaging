@@ -1,0 +1,50 @@
+Improve systemd service script
+--- a/extras/startup-scripts/patroni.service
++++ b/extras/startup-scripts/patroni.service
+@@ -1,9 +1,17 @@
+-# This is an example systemd config file for Patroni
+-# You can copy it to "/etc/systemd/system/patroni.service",
++# It's not recommended to modify this file in-place, because it will be
++# overwritten during package upgrades.  If you want to customize, the
++# best way is to create a file "/etc/systemd/system/patroni.service",
++# containing
++#	.include /lib/systemd/system/patroni.service
++#	Environment=PATRONI_CONFIG_LOCATION=...
++# For more info about custom unit files, see
++# http://fedoraproject.org/wiki/Systemd#How_do_I_customize_a_unit_file.2F_add_a_custom_unit_file.3F
++
+ 
+ [Unit]
+-Description=Runners to orchestrate a high-availability PostgreSQL
+-After=syslog.target network.target
++Description=PostgreSQL high-availability manager
++After=syslog.target
++After=network.target
+ 
+ [Service]
+ Type=simple
+@@ -14,8 +22,14 @@
+ # Where to send early-startup messages from the server
+ # This is normally controlled by the global default set by systemd
+ # StandardOutput=syslog
++# Location of Patroni configuration
++Environment=PATRONI_CONFIG_LOCATION=/etc/patroni/patroni.yml
++
++# Disable OOM kill on the postmaster
++OOMScoreAdjust=-1000
+ 
+-ExecStart=/bin/patroni /etc/patroni.yml
++ExecStart=/usr/bin/patroni ${PATRONI_CONFIG_LOCATION}
++ExecReload=/bin/kill -HUP $MAINPID
+ 
+ # only kill the patroni process, not it's children, so it will gracefully stop postgres
+ KillMode=process
+@@ -25,6 +39,8 @@
+ 
+ # Do not restart the service if it crashes, we want to manually inspect database on failure
+ Restart=no
++# only kill the patroni process, not it's children, so it will gracefully stop postgres
++KillMode=process
+ 
+ [Install]
+ WantedBy=multi-user.target

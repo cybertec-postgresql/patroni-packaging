@@ -1,0 +1,21 @@
+Source: patroni
+Priority: optional
+Maintainer: Ants Aasma <ants@cybertec.at>
+Build-Depends: debhelper (>=9), python-psycopg2 (>=2.5.4), python-setuptools, python-dev, libyaml-dev
+Standards-Version: 3.9.6
+Section: libs
+X-Python-Version: all
+Homepage: https://github.com/zalando/patroni/
+#Vcs-Git: git://anonscm.debian.org/collab-maint/patroni.git
+#Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/patroni.git
+
+Package: patroni
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-psycopg2 (>=2.5.4), libyaml-0-2
+Description: PostgreSQL HA with ZooKeeper, etcd or Consul
+  Patroni is a template for you to create your own customized,
+  high-availability solution using Python and - for maximum accessibility
+  - a distributed configuration store like ZooKeeper, etcd or Consul. Database
+  engineers, DBAs, DevOps engineers, and SREs who are looking to quickly
+  deploy HA PostgreSQL in the datacenter-or anywhere else-will hopefully find
+  it useful.

@@ -1,0 +1,10 @@
+patroni-*/
+patroni-dbgsym_*.deb
+patroni_*.debian.tar.xz
+patroni_*.dsc
+patroni_*.build
+patroni_*.buildinfo
+patroni_*.changes
+patroni_*.deb
+patroni_*.orig.tar.gz
+

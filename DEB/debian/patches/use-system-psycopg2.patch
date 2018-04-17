@@ -1,0 +1,10 @@
+Remove psycopg2 from requirements as that will be provided by a system package
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,6 +1,5 @@
+ urllib3>=1.19.1,!=1.21
+ boto
+-psycopg2>=2.5.4
+ PyYAML
+ requests
+ six >= 1.7

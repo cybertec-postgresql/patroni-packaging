@@ -1,0 +1,2 @@
+extras/startup-scripts/patroni.service /lib/systemd/system
+patroni.yml.sample /etc/patroni

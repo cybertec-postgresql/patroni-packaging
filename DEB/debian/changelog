@@ -1,0 +1,23 @@
+patroni (1.4.3-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.4.3
+
+ -- Ants Aasma <ants@cybertec.at>  Thu, 5 Apr 2018 23:40:01 +0300
+
+patroni (1.4.2-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.4.2
+
+ -- Ants Aasma <ants@cybertec.at>  Thu, 8 Feb 2018 14:06:12 +0200
+
+patroni (1.3.2-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.3.2
+
+ -- Ants Aasma <ants@cybertec.at>  Sun, 6 Aug 2017 13:47:12 +0300
+
+patroni (1.2.5-1) UNRELEASED; urgency=low
+
+  * Initial release
+
+ -- Ants Aasma <ants@cybertec.at>  Fri, 21 Apr 2017 15:12:33 +0000
