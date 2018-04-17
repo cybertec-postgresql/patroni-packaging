@@ -2,11 +2,11 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.3.4
-Release:       2.rhel7
+Version:       1.3.6
+Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.3.4.tar.gz
+Source:        patroni-1.3.6.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        telia-patch.diff
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
@@ -82,6 +82,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+
+* Fri Dec 8 2017 Ants Aasma  1.3.6-1.rhel7
+- Update to 1.3.6
 
 * Sat Sep 30 2017 Ants Aasma  1.3.4-2.rhel7
 - Add warning for cluster being in paused mode
