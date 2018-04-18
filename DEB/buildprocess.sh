@@ -11,3 +11,12 @@ cp -r debian/ patroni-${PATRONI_VERSION}
 cd patroni-${PATRONI_VERSION}
 
 debuild -us -uc
+
+export PATH=/opt/go/bin:$PATH
+mkdir -p /build-tmp/gopath
+export GOPATH=/build-tmp/gopath
+go get github.com/cybertec-postgresql/vip-manager
+cd /build-tmp/gopath/src/github.com/cybertec-postgresql/vip-manager/
+make vip-manager
+make package
+cp vip-manager*.deb /debian-build/
