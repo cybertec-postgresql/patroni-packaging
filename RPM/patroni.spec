@@ -2,13 +2,12 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.3.6
+Version:       1.4.3
 Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.3.6.tar.gz
+Source:        patroni-1.4.3.tar.gz
 Source1:       patroni-customizations.tar.gz
-Patch0:        telia-patch.diff
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.6.1, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -21,7 +20,6 @@ Packaged version of Patroni HA manager.
 %prep
 %setup
 %setup -D -T -a 1
-%patch0 -p1
 
 %build
 # remove some things
@@ -31,7 +29,7 @@ Packaged version of Patroni HA manager.
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
 virtualenv --distribute $RPM_BUILD_ROOT%{INSTALLPATH}
-grep -v psycopg2 requirements.txt > requirements-venv.txt
+grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirements-venv.txt
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -r requirements-venv.txt
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install --no-deps .
@@ -57,8 +55,6 @@ chmod 0600 $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 find $RPM_BUILD_ROOT%{INSTALLPATH}/bin/ -type f -perm /u+x,g+x -exec /usr/sbin/prelink -u {} \;
 # Remove debug info containing BUILDROOT. Hopefully nobody needs to debug or profile the python modules
 find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -name '*.so' -exec /usr/bin/strip -g {} \;
-# Fix up permissions on prettytable
-find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -not -perm /o+r | xargs chmod o+r
 
 
 %post
@@ -82,6 +78,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+
+* Tue May 8 2018 Ants Aasma  1.4.3-1.rhel7
+- Update to 1.4.3
 
 * Fri Dec 8 2017 Ants Aasma  1.3.6-1.rhel7
 - Update to 1.3.6
