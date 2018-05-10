@@ -3,11 +3,12 @@
 %define debug_package %{nil}
 Name:          patroni
 Version:       1.4.3
-Release:       1.rhel7
+Release:       2.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.4.3.tar.gz
 Source1:       patroni-customizations.tar.gz
+Patch0:        service-info-only-in-pretty-format.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.6.1, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -20,6 +21,7 @@ Packaged version of Patroni HA manager.
 %prep
 %setup
 %setup -D -T -a 1
+%patch0 -p1
 
 %build
 # remove some things
@@ -78,6 +80,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+
+* Thu May 10 2018 Ants Aasma 1.4.3-2.rhel7
+- Only display service info output in pretty format.
 
 * Tue May 8 2018 Ants Aasma  1.4.3-1.rhel7
 - Update to 1.4.3
