@@ -1,3 +1,9 @@
+patroni (1.4.4-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.4.4
+
+ -- Kaarel Moppel <km@cybertec.at>  Mon, 2 Jul 2018 14:40:01 +0300
+
 patroni (1.4.3-1) UNRELEASED; urgency=low
 
   * Upgrade version to 1.4.3

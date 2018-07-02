@@ -1,7 +1,7 @@
 Source: patroni
 Priority: optional
 Maintainer: Ants Aasma <ants@cybertec.at>
-Build-Depends: debhelper (>=9), python-psycopg2 (>=2.5.4), python-setuptools, python-dev, libyaml-dev
+Build-Depends: debhelper (>=9), python3-psycopg2 (>=2.5.4), python3-setuptools, python3-dev, libyaml-dev
 Standards-Version: 3.9.6
 Section: libs
 X-Python-Version: all
@@ -11,7 +11,7 @@ Homepage: https://github.com/zalando/patroni/
 
 Package: patroni
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-psycopg2 (>=2.5.4), libyaml-0-2
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python3-psycopg2 (>=2.5.4), libyaml-0-2
 Description: PostgreSQL HA with ZooKeeper, etcd or Consul
   Patroni is a template for you to create your own customized,
   high-availability solution using Python and - for maximum accessibility

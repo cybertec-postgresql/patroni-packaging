@@ -1,11 +1,11 @@
 #!/bin/bash
 
-PATRONI_VERSION=1.4.3
+PATRONI_VERSION=1.4.4
 
 set -ex
 
 cd $(dirname $0)
-curl -L https://github.com/zalando/patroni/archive/v${PATRONI_VERSION}.tar.gz -o patroni_${PATRONI_VERSION}.orig.tar.gz
+curl -L https://github.com/zalando/patroni/archive/v1.4.4.tar.gz -o patroni_${PATRONI_VERSION}.orig.tar.gz
 tar -xzf patroni_${PATRONI_VERSION}.orig.tar.gz
 cp -r debian/ patroni-${PATRONI_VERSION}
 cd patroni-${PATRONI_VERSION}
