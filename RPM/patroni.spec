@@ -2,11 +2,11 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.4.4
+Version:       1.5.0
 Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.4.4.tar.gz
+Source:        patroni-1.5.0.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        service-info-only-in-pretty-format.patch
 Patch1:        patronictl-reinit-wait.patch
@@ -37,6 +37,7 @@ grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirem
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -r requirements-venv.txt
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install --no-deps .
+rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python2.7/site-packages/consul/aio.py
 
 rm -rf $RPM_BUILD_ROOT/usr/
 
@@ -82,6 +83,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+* Fri Sep 21 2018 Ants Aasma 1.5.0-1.rhel7
+- Update to 1.5.0
+
 * Wed May 23 2018 Ants Aasma 1.4.4-1.rhel7
 - Update to 1.4.4
 - Add patronictl reinit --wait feature
