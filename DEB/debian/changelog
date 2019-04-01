@@ -1,3 +1,9 @@
+patroni (1.5.5-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.5.5
+
+ -- Anton Patsev <patsev[dot]anton[@]gmail[dot]com>  Mon, 1 Apr 2019 12:08:01 +0600
+
 patroni (1.4.3-1) UNRELEASED; urgency=low
 
   * Upgrade version to 1.4.3
