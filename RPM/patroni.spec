@@ -2,16 +2,16 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.5.5
+Version:       1.5.6
 Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.5.5.tar.gz
+Source:        patroni-1.5.6.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        service-info-only-in-pretty-format.patch
 Patch1:        patronictl-reinit-wait.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
-Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.6.1, postgresql-server, libyaml
+Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.7.0, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
@@ -83,6 +83,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+* Mon Apr 8 2019 Ants Aasma 1.5.6-1.rhel7
+- Update to 1.5.6
+
 * Mon Apr 1 2019 Anton Patsev 1.5.5-1.rhel7
 - Update to 1.5.5
 
