@@ -2,11 +2,11 @@
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
 Name:          patroni
-Version:       1.5.6
+Version:       1.6.0
 Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.5.6.tar.gz
+Source:        patroni-1.6.0.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        service-info-only-in-pretty-format.patch
 Patch1:        patronictl-reinit-wait.patch
@@ -83,6 +83,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+* Mon Apr 8 2019 Julian Markwort 1.6.0-1.rhel7
+- Update to 1.6.0
+
 * Mon Apr 8 2019 Ants Aasma 1.5.6-1.rhel7
 - Update to 1.5.6
 

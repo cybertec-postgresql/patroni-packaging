@@ -7,4 +7,7 @@ dockerimage:
 	docker build --tag=debian-build:9 .
 
 debs:
-	docker run --rm -v `pwd`:/debian-build debian-build:9 /debian-build/buildprocess.sh
+	docker run --rm -v `pwd`:/debian-build:Z debian-build:9 /debian-build/buildprocess.sh
+
+clean:
+	rm -rf *.build *.buildinfo *.changes *.tar.xz *.tar.gz *.deb *.dsc patroni-*/

@@ -1,3 +1,15 @@
+patroni (1.6.0-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.6.0
+
+ -- Julian Markwort <julian[dot]markwort[@]cybertec[dot]at>  Wed, 31 Jul 2019 15:57:54 +0200
+
+patroni (1.5.6-1) UNRELEASED; urgency=low
+
+  * Upgrade version to 1.5.6
+
+ -- Julian Markwort <julian[dot]markwort[@]cybertec[dot]at>  Wed, 31 Jul 2019 15:57:54 +0200
+
 patroni (1.5.5-1) UNRELEASED; urgency=low
 
   * Upgrade version to 1.5.5
