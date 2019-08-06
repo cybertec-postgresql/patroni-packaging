@@ -9,7 +9,7 @@ Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.6.0.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        service-info-only-in-pretty-format.patch
-Patch1:        patronictl-reinit-wait.patch
+Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.7.0, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -34,7 +34,7 @@ rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
 virtualenv --distribute $RPM_BUILD_ROOT%{INSTALLPATH}
 grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools psycopg2-binary
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -r requirements-venv.txt
 $RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install --no-deps .
 rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python2.7/site-packages/consul/aio.py

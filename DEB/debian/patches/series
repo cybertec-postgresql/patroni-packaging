@@ -1,3 +1,2 @@
 better-startup-script.patch
 add-sample-config.patch
-use-system-psycopg2.patch
