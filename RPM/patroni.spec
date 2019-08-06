@@ -10,6 +10,8 @@ Source:        patroni-1.6.0.tar.gz
 Source1:       patroni-customizations.tar.gz
 Patch0:        service-info-only-in-pretty-format.patch
 Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
+Patch2:        add-sample-config.patch
+Patch3:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.7.0, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -24,6 +26,8 @@ Packaged version of Patroni HA manager.
 %setup -D -T -a 1
 %patch0 -p1
 %patch1 -p1
+%patch2 -p1
+%patch3 -p1
 
 %build
 # remove some things

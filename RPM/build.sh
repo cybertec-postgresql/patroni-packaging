@@ -1,7 +1,7 @@
 #!/bin/sh
 mkdir -p /root/rpmbuild/SOURCES
 tar -czf /root/rpmbuild/SOURCES/patroni-customizations.tar.gz patroni.2.service patroni-watchdog.service postgres-telia.yml 
-cp *.patch /root/rpmbuild/SOURCES/
+cp patches/*.patch /root/rpmbuild/SOURCES/
 curl -L https://github.com/zalando/patroni/archive/v1.6.0.tar.gz -o /root/rpmbuild/SOURCES/patroni-1.6.0.tar.gz
 rpmbuild -bb patroni.spec
 mkdir -p rpms

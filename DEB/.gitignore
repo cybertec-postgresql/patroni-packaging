@@ -8,3 +8,5 @@ patroni_*.changes
 patroni_*.deb
 patroni_*.orig.tar.gz
 
+vip-manager_*.deb
+*.log
