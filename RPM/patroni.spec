@@ -13,10 +13,13 @@ Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
 Patch2:        add-sample-config.patch
 Patch3:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
-Requires:      /usr/bin/python2.7, python-psycopg2 >= 2.7.0, postgresql-server, libyaml
+Requires:      /usr/bin/python2.7, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
+
+%global __requires_exclude_from ^%{INSTALLPATH}/lib/python2.7/site-packages/(psycopg2/|_cffi_backend.so)
+%global __provides_exclude_from ^%{INSTALLPATH}/lib/python2.7/
 
 %description
 Packaged version of Patroni HA manager.
