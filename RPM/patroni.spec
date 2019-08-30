@@ -13,13 +13,15 @@ Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
 Patch2:        add-sample-config.patch
 Patch3:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
-Requires:      /usr/bin/python2.7, postgresql-server, libyaml
+Requires:      /usr/bin/python3.6, python36-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
 
-%global __requires_exclude_from ^%{INSTALLPATH}/lib/python2.7/site-packages/(psycopg2/|_cffi_backend.so)
-%global __provides_exclude_from ^%{INSTALLPATH}/lib/python2.7/
+%global __requires_exclude_from ^%{INSTALLPATH}/lib/python3.6/site-packages/(psycopg2/|_cffi_backend.so|_cffi_backend.cpython-36m-x86_64-linux-gnu.so|.libs_cffi_backend/libffi-.*.so.6.0.4)
+%global __provides_exclude_from ^%{INSTALLPATH}/lib/python3.6/
+
+%global __python %{__python3.6}
 
 %description
 Packaged version of Patroni HA manager.
@@ -39,16 +41,16 @@ Packaged version of Patroni HA manager.
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
-virtualenv --distribute $RPM_BUILD_ROOT%{INSTALLPATH}
+virtualenv-3.6 --distribute --system-site-packages $RPM_BUILD_ROOT%{INSTALLPATH}
 grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -U setuptools psycopg2-binary
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install -r requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip install --no-deps .
-rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python2.7/site-packages/consul/aio.py
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -U setuptools
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -r requirements-venv.txt
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install --no-deps .
+rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python3.6/site-packages/consul/aio.py
 
 rm -rf $RPM_BUILD_ROOT/usr/
 
-virtualenv --relocatable $RPM_BUILD_ROOT%{INSTALLPATH}
+virtualenv-3.6 --relocatable $RPM_BUILD_ROOT%{INSTALLPATH}
 sed -i "s#$RPM_BUILD_ROOT##" $RPM_BUILD_ROOT%{INSTALLPATH}/bin/activate*
 
 #find $(VENV_PATH) -name \*py[co] -exec rm {} \;
