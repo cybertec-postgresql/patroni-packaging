@@ -1,12 +1,10 @@
-#!/bin/bash
-
 help:
-	$(error Run make dockerimage to create build image, then make debs to create debian packaged)
+	$(error Run make docker-image to create build image, then make debs to create debian packaged)
 
-dockerimage:
+docker-image:
 	docker build --tag=debian-build:9 .
 
-debs:
+package:
 	docker run --rm -v `pwd`:/debian-build:Z debian-build:9 /debian-build/buildprocess.sh
 
 clean:
