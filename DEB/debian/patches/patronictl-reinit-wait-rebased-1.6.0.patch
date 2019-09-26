@@ -1,0 +1,87 @@
+diff --git a/patroni/api.py b/patroni/api.py
+index 894064f..6560ae7 100644
+--- a/patroni/api.py
++++ b/patroni/api.py
+@@ -82,6 +82,7 @@ class RestApiHandler(BaseHTTPRequestHandler):
+             lost = patroni.logger.records_lost
+             if lost:
+                 response['logger_records_lost'] = lost
++        response['action'] = self.server.patroni.ha.action
+         self._write_json_response(status_code, response)
+ 
+     def do_GET(self, write_status_code_only=False):
+diff --git a/patroni/ctl.py b/patroni/ctl.py
+index a4df213..ab102de 100644
+--- a/patroni/ctl.py
++++ b/patroni/ctl.py
+@@ -585,20 +585,37 @@ def restart(obj, cluster_name, member_names, force, role, p_any, scheduled, vers
+ @click.argument('cluster_name')
+ @click.argument('member_names', nargs=-1)
+ @option_force
++@click.option('--wait', help='Wait until reinitialization completes', is_flag=True)
+ @click.pass_obj
+-def reinit(obj, cluster_name, member_names, force):
++def reinit(obj, cluster_name, member_names, force, wait):
+     cluster = get_dcs(obj, cluster_name).get_cluster()
+     members = get_members(cluster, cluster_name, member_names, None, force, 'reinitialize')
+ 
++    wait_on_members = []
+     for member in members:
+         body = {'force': force}
+         while True:
+             r = request_patroni(member, 'post', 'reinitialize', body, auth_header(obj))
+-            if not check_response(r, member.name, 'reinitialize') and r.text.endswith(' already in progress') \
++            started = check_response(r, member.name, 'reinitialize')
++            if not started and r.text.endswith(' already in progress') \
+                     and not force and click.confirm('Do you want to cancel it and reinitialize anyway?'):
+                 body['force'] = True
+                 continue
+             break
++        if started and wait:
++            wait_on_members.append(member)
++
++    last_display = []
++    while wait_on_members:
++        if wait_on_members != last_display:
++            click.echo('Waiting for reinitialize to complete on: {0}'.format(
++                ", ".join(member.name for member in wait_on_members))
++            )
++            last_display[:] = wait_on_members
++        time.sleep(2)
++        for member in wait_on_members:
++            if request_patroni(member, 'get', 'patroni').json().get('action') != 'reinitialize':
++                wait_on_members.remove(member)
+ 
+ 
+ def _do_failover_or_switchover(obj, action, cluster_name, master, candidate, force, scheduled=None):
+diff --git a/patroni/ha.py b/patroni/ha.py
+index 403f512..bfd0de5 100644
+--- a/patroni/ha.py
++++ b/patroni/ha.py
+@@ -1118,6 +1118,13 @@ class Ha(object):
+ 
+         return self._async_executor.scheduled_action + ' in progress'
+ 
++    @property
++    def action(self):
++        with self._async_executor:
++            if self._async_executor.busy:
++                return self._async_executor.scheduled_action
++        return None
++
+     @staticmethod
+     def sysid_valid(sysid):
+         # sysid does tv_sec << 32, where tv_sec is the number of seconds sine 1970,
+diff --git a/tests/test_api.py b/tests/test_api.py
+index 327dbf8..5bf8c85 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -100,6 +100,8 @@ class MockHa(object):
+     def is_standby_cluster():
+         return False
+ 
++    action = None
++
+ 
+ class MockLogger(object):
+ 

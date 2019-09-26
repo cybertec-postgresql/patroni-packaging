@@ -1,3 +1,4 @@
 better-startup-script.patch
 add-sample-config.patch
-use-system-psycopg2.patch
+service-info-only-in-pretty-format.patch
+patronictl-reinit-wait-rebased-1.6.0.patch

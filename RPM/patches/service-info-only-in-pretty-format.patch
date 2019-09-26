@@ -1,0 +1,40 @@
+diff --git a/patroni/ctl.py b/patroni/ctl.py
+index 7f97986..b85dfaf 100644
+--- a/patroni/ctl.py
++++ b/patroni/ctl.py
+@@ -713,20 +713,21 @@ def output_members(cluster, name, extended=False, fmt='pretty'):
+ 
+     print_output(columns, rows, alignment, fmt)
+ 
+-    service_info = []
+-    if cluster.is_paused():
+-        service_info.append('Maintenance mode: on')
+-
+-    if cluster.failover and cluster.failover.scheduled_at:
+-        info = 'Switchover scheduled at: ' + cluster.failover.scheduled_at.isoformat()
+-        if cluster.failover.leader:
+-            info += '\n                    from: ' + cluster.failover.leader
+-        if cluster.failover.candidate:
+-            info += '\n                      to: ' + cluster.failover.candidate
+-        service_info.append(info)
+-
+-    if service_info:
+-        click.echo(' ' + '\n '.join(service_info))
++    if fmt == "pretty":
++        service_info = []
++        if cluster.is_paused():
++            service_info.append('Maintenance mode: on')
++
++        if cluster.failover and cluster.failover.scheduled_at:
++            info = 'Switchover scheduled at: ' + cluster.failover.scheduled_at.isoformat()
++            if cluster.failover.leader:
++                info += '\n                    from: ' + cluster.failover.leader
++            if cluster.failover.candidate:
++                info += '\n                      to: ' + cluster.failover.candidate
++            service_info.append(info)
++
++        if service_info:
++            click.echo(' ' + '\n '.join(service_info))
+ 
+ 
+ @ctl.command('list', help='List the Patroni members for a given Patroni')

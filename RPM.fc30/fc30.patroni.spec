@@ -3,7 +3,7 @@
 %define debug_package %{nil}
 Name:          patroni
 Version:       1.6.0
-Release:       1.rhel7
+Release:       1.fc30
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.6.0.tar.gz
@@ -13,15 +13,15 @@ Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
 Patch2:        add-sample-config.patch
 Patch3:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
-Requires:      /usr/bin/python3.6, python36-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
-BuildRequires: prelink libyaml-devel gcc
+Requires:      /usr/bin/python3, python3-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
+BuildRequires: libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
 
-%global __requires_exclude_from ^%{INSTALLPATH}/lib/python3.6/site-packages/(psycopg2/|_cffi_backend.so|_cffi_backend.cpython-36m-x86_64-linux-gnu.so|.libs_cffi_backend/libffi-.*.so.6.0.4)
-%global __provides_exclude_from ^%{INSTALLPATH}/lib/python3.6/
+%global __requires_exclude_from ^%{INSTALLPATH}/lib/python3.7/site-packages/(psycopg2/|_cffi_backend.so|_cffi_backend.cpython-37m-x86_64-linux-gnu.so|.libs_cffi_backend/libffi-.*.so.6.0.4)
+%global __provides_exclude_from ^%{INSTALLPATH}/lib/python3.7/
 
-%global __python %{__python3.6}
+%global __python %{__python3.7}
 
 %description
 Packaged version of Patroni HA manager.
@@ -41,16 +41,20 @@ Packaged version of Patroni HA manager.
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
-virtualenv-3.6 --distribute --system-site-packages $RPM_BUILD_ROOT%{INSTALLPATH}
+virtualenv --distribute --system-site-packages $RPM_BUILD_ROOT%{INSTALLPATH}
 grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -U setuptools
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -r requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install --no-deps .
-rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python3.6/site-packages/consul/aio.py
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.7 install -U setuptools
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.7 install -r requirements-venv.txt
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.7 install --no-deps .
+rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python3.7/site-packages/consul/aio.py
 
 rm -rf $RPM_BUILD_ROOT/usr/
 
-virtualenv-3.6 --relocatable $RPM_BUILD_ROOT%{INSTALLPATH}
+#cleanup against .build_id conflicts...
+rm $RPM_BUILD_ROOT%{INSTALLPATH}/bin/python3.7
+rm $RPM_BUILD_ROOT%{INSTALLPATH}/bin/python3
+
+virtualenv --relocatable $RPM_BUILD_ROOT%{INSTALLPATH}
 sed -i "s#$RPM_BUILD_ROOT##" $RPM_BUILD_ROOT%{INSTALLPATH}/bin/activate*
 
 #find $(VENV_PATH) -name \*py[co] -exec rm {} \;
@@ -66,7 +70,7 @@ cp postgres-telia.yml $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 chmod 0600 $RPM_BUILD_ROOT%{INSTALLPATH}/etc/postgresql.yml.sample
 
 # undo prelinking
-find $RPM_BUILD_ROOT%{INSTALLPATH}/bin/ -type f -perm /u+x,g+x -exec /usr/sbin/prelink -u {} \;
+#find $RPM_BUILD_ROOT%{INSTALLPATH}/bin/ -type f -perm /u+x,g+x -exec /usr/sbin/prelink -u {} \;
 # Remove debug info containing BUILDROOT. Hopefully nobody needs to debug or profile the python modules
 find $RPM_BUILD_ROOT%{INSTALLPATH}/lib/ -type f -name '*.so' -exec /usr/bin/strip -g {} \;
 

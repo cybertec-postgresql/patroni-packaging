@@ -1,20 +1,20 @@
 diff --git a/patroni/api.py b/patroni/api.py
-index 08ffa17..035c7ba 100644
+index 894064f..6560ae7 100644
 --- a/patroni/api.py
 +++ b/patroni/api.py
-@@ -74,6 +74,7 @@ class RestApiHandler(BaseHTTPRequestHandler):
-             response['watchdog_failed'] = True
-         if patroni.ha.is_paused():
-             response['pause'] = True
+@@ -82,6 +82,7 @@ class RestApiHandler(BaseHTTPRequestHandler):
+             lost = patroni.logger.records_lost
+             if lost:
+                 response['logger_records_lost'] = lost
 +        response['action'] = self.server.patroni.ha.action
          self._write_json_response(status_code, response)
  
      def do_GET(self, write_status_code_only=False):
 diff --git a/patroni/ctl.py b/patroni/ctl.py
-index 7a2fc2d..165d414 100644
+index a4df213..ab102de 100644
 --- a/patroni/ctl.py
 +++ b/patroni/ctl.py
-@@ -565,20 +565,37 @@ def restart(obj, cluster_name, member_names, force, role, p_any, scheduled, vers
+@@ -585,20 +585,37 @@ def restart(obj, cluster_name, member_names, force, role, p_any, scheduled, vers
  @click.argument('cluster_name')
  @click.argument('member_names', nargs=-1)
  @option_force
@@ -55,10 +55,10 @@ index 7a2fc2d..165d414 100644
  
  def _do_failover_or_switchover(obj, action, cluster_name, master, candidate, force, scheduled=None):
 diff --git a/patroni/ha.py b/patroni/ha.py
-index a7d4ec6..7c94d5c 100644
+index 403f512..bfd0de5 100644
 --- a/patroni/ha.py
 +++ b/patroni/ha.py
-@@ -1074,6 +1074,13 @@ class Ha(object):
+@@ -1118,6 +1118,13 @@ class Ha(object):
  
          return self._async_executor.scheduled_action + ' in progress'
  
@@ -73,15 +73,15 @@ index a7d4ec6..7c94d5c 100644
      def sysid_valid(sysid):
          # sysid does tv_sec << 32, where tv_sec is the number of seconds sine 1970,
 diff --git a/tests/test_api.py b/tests/test_api.py
-index 721a393..be9dace 100644
+index 327dbf8..5bf8c85 100644
 --- a/tests/test_api.py
 +++ b/tests/test_api.py
-@@ -99,6 +99,8 @@ class MockHa(object):
+@@ -100,6 +100,8 @@ class MockHa(object):
      def is_standby_cluster():
          return False
  
 +    action = None
 +
  
- class MockPatroni(object):
+ class MockLogger(object):
  
