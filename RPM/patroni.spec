@@ -8,8 +8,8 @@ License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        patroni-1.6.3.tar.gz
 Source1:       patroni-customizations.tar.gz
-Patch0:        service-info-only-in-pretty-format.patch
-Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
+#Patch0:        service-info-only-in-pretty-format.patch
+#Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
 Patch2:        add-sample-config.patch
 Patch3:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
@@ -29,8 +29,8 @@ Packaged version of Patroni HA manager.
 %prep
 %setup
 %setup -D -T -a 1
-%patch0 -p1
-%patch1 -p1
+#%patch0 -p1
+#%patch1 -p1
 %patch2 -p1
 %patch3 -p1
 
