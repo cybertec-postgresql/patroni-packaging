@@ -5,7 +5,7 @@ docker-image:
 	docker build . --tag patroni-packaging:latest
 
 package:
-	docker run --rm -v `pwd`:/patroni-packaging:Z -i -t patroni-packaging:latest
+	docker run --rm -e USER_ID=`id -u` -v `pwd`:/patroni-packaging:Z -i -t patroni-packaging:latest
 
 clean:
 	rm -rf rpms
