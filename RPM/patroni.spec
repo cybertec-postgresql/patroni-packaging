@@ -1,17 +1,23 @@
+%define VERSION        1.6.4
+# SHA256SUM of the patroni source archive
+%define SRC_SHA256SUM  1dac8b0c6e79e06521fd5b22a76616be90e84d7d4c4e4ebe5fc404a787ff1729
+
 %define        ENVNAME  patroni
 %define        INSTALLPATH /opt/app/patroni
 %define debug_package %{nil}
+
+# Fetch remote sources
+%undefine _disable_source_fetch
+
 Name:          patroni
-Version:       1.6.4
+Version:       %{VERSION}
 Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
-Source:        patroni-1.6.4.tar.gz
+Source:        https://github.com/zalando/patroni/archive/v%{version}.tar.gz
 Source1:       patroni-customizations.tar.gz
-#Patch0:        service-info-only-in-pretty-format.patch
-#Patch1:        patronictl-reinit-wait-rebased-1.6.0.patch
-Patch2:        add-sample-config.patch
-Patch3:        better-startup-script.patch
+Patch0:        add-sample-config.patch
+Patch1:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
 Requires:      /usr/bin/python3.6, python36-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
@@ -27,12 +33,12 @@ Requires(postun):       %{_sbindir}/update-alternatives
 Packaged version of Patroni HA manager.
 
 %prep
+# Check SHA256 sum of the fetched source
+echo "%{SRC_SHA256SUM} %{SOURCE0}" | sha256sum -c -
 %setup
 %setup -D -T -a 1
-#%patch0 -p1
-#%patch1 -p1
-%patch2 -p1
-%patch3 -p1
+%patch0 -p1
+%patch1 -p1
 
 %build
 # remove some things
