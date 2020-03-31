@@ -11,7 +11,7 @@
 
 Name:          patroni
 Version:       %{VERSION}
-Release:       1.rhel7
+Release:       2.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        https://github.com/zalando/patroni/archive/v%{version}.tar.gz
@@ -19,7 +19,7 @@ Source1:       patroni-customizations.tar.gz
 Patch0:        add-sample-config.patch
 Patch1:        better-startup-script.patch
 BuildRoot:     %{_tmppath}/%{buildprefix}-buildroot
-Requires:      /usr/bin/python3.6, python36-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
+Requires:      python3, python3-psycopg2 >= 2.5.4, libffi, postgresql-server, libyaml
 BuildRequires: prelink libyaml-devel gcc
 Requires(post): %{_sbindir}/update-alternatives
 Requires(postun):       %{_sbindir}/update-alternatives
@@ -27,7 +27,7 @@ Requires(postun):       %{_sbindir}/update-alternatives
 %global __requires_exclude_from ^%{INSTALLPATH}/lib/python3.6/site-packages/(psycopg2/|_cffi_backend.so|_cffi_backend.cpython-36m-x86_64-linux-gnu.so|.libs_cffi_backend/libffi-.*.so.6.0.4)
 %global __provides_exclude_from ^%{INSTALLPATH}/lib/python3.6/
 
-%global __python %{__python3.6}
+%global __python %{__python3}
 
 %description
 Packaged version of Patroni HA manager.
@@ -47,12 +47,12 @@ echo "%{SRC_SHA256SUM} %{SOURCE0}" | sha256sum -c -
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{INSTALLPATH}
-virtualenv-3.6 --distribute --system-site-packages $RPM_BUILD_ROOT%{INSTALLPATH}
+virtualenv-3 --distribute --system-site-packages $RPM_BUILD_ROOT%{INSTALLPATH}
 grep -v psycopg2 requirements.txt | sed 's/kubernetes=.*/kubernetes/' > requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -U setuptools
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install -r requirements-venv.txt
-$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3.6 install --no-deps .
-rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python3.6/site-packages/consul/aio.py
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3 install -U setuptools
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3 install -r requirements-venv.txt
+$RPM_BUILD_ROOT%{INSTALLPATH}/bin/pip3 install --no-deps .
+#rm $RPM_BUILD_ROOT%{INSTALLPATH}/lib/python3*/site-packages/consul/aio.py
 
 rm -rf $RPM_BUILD_ROOT/usr/
 
@@ -98,6 +98,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+* Mon Mar 30 2020 Ants Aasma 1.6.4-2.rhel7
+- Change python dependency names to python3 and python3-psycopg2
+
 * Wed Jan 29 2020 Pavel Zhbanov 1.6.4-1.rhel7
 - Update to 1.6.4
 
