@@ -1,6 +1,6 @@
-%define VERSION        1.6.4
+%define VERSION        1.6.5
 # SHA256SUM of the patroni source archive
-%define SRC_SHA256SUM  1dac8b0c6e79e06521fd5b22a76616be90e84d7d4c4e4ebe5fc404a787ff1729
+%define SRC_SHA256SUM  a72e18e901be2404831f819b4a22c4df67d5fbb013e455d22fdc352f1e171be6
 
 %define        ENVNAME  patroni
 %define        INSTALLPATH /opt/app/patroni
@@ -11,7 +11,7 @@
 
 Name:          patroni
 Version:       %{VERSION}
-Release:       2.rhel7
+Release:       1.rhel7
 License:       MIT
 Summary:       PostgreSQL high-availability manager
 Source:        https://github.com/zalando/patroni/archive/v%{version}.tar.gz
@@ -98,6 +98,9 @@ rm -rf $RPM_BUILD_ROOT
 %attr(664, root, root) /lib/systemd/system/patroni-watchdog.service
 
 %changelog
+* Mon May 18 2020 Ants Aasma 1.6.5-1.thel7
+- Update to 1.6.5
+
 * Mon Mar 30 2020 Ants Aasma 1.6.4-2.rhel7
 - Change python dependency names to python3 and python3-psycopg2
 
