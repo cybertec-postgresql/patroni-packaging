@@ -322,6 +322,17 @@ Complete!
 </p>
 </details>
 
+If not already present (or if you don't yet have the common repository in your system), install the postgresql.org repository:
+<details><summary>show</summary>
+<p>
+
+```bash
+sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+```
+
+</p>
+</details>
+
 Install the new package:
 <details><summary>show</summary>
 <p>
