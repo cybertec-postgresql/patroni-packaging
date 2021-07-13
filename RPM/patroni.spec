@@ -1,6 +1,6 @@
-%define VERSION        2.0.1
+%define VERSION        2.1.0
 # SHA256SUM of the patroni source archive
-%define SRC_SHA256SUM  7f1420ab9f62957c1efc11211ccb572cb08575694949050e9b412de9a37e770b
+%define SRC_SHA256SUM  1079a340b631888a43114adbaedf81e32d9d625e50dbf341252dd0e2b1fda724
 
 %define        ENVNAME  patroni
 %define        INSTALLPATH /opt/app/patroni

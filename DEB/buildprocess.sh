@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PATRONI_VERSION=2.0.1
+PATRONI_VERSION=2.1.0
 
 set -ex
 
