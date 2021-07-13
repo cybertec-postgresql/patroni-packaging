@@ -334,6 +334,7 @@ sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-
 </details>
 
 Install the new package:
+> the common repository contains a `patroni` package, but you'll need to install one of the metapackages to pull in the dependencies for your chosen DCS, e.g. `patroni-etcd` or `patroni-consul`.
 <details><summary>show</summary>
 <p>
 
