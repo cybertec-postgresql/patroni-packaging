@@ -1,3 +1,10 @@
+# This project is now deprecated! :warning:
+
+Since [postgresql.org](https://www.postgresql.org/download/) provides [packaging](https://git.postgresql.org/gitweb/?p=pgrpms.git;a=blob;f=rpm/redhat/master/common/patroni/master/patroni.spec) for patroni on most distributions, we feel that we should not work on solving the same things in different ways. Thus we'll be deprecating this repository and the packages.
+
+Please check [this document](package_migration.md) for migration steps.
+
+
 # patroni-packaging
 
 This project packages patroni, along with all necessary libs that aren't easily available as packages themselves.
